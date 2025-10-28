@@ -3,6 +3,7 @@ import pandas as pd
 from rapidfuzz import fuzz, process
 import io
 import re
+import os
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
@@ -386,4 +387,6 @@ def download_csv():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    app.run(debug=debug, host='0.0.0.0', port=port)
