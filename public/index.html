@@ -160,6 +160,19 @@
         let csvData = '';
         let dateStr = '';
 
+        // Helper function to read file as base64
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1]; // Remove data:...;base64, prefix
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
         document.getElementById('upload-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -168,12 +181,33 @@
             document.getElementById('success-display').classList.add('hidden');
             document.getElementById('loading').classList.remove('hidden');
 
-            const formData = new FormData(e.target);
+            const form = e.target;
+            const fileInputs = ['prizepicks', 'underdog', 'pick6', 'sleeper', 'fanduel', 'bbm'];
 
             try {
+                // Read all files as base64
+                const files = {};
+                for (const inputName of fileInputs) {
+                    const fileInput = form.elements[inputName];
+                    if (fileInput && fileInput.files[0]) {
+                        const file = fileInput.files[0];
+                        const content = await readFileAsBase64(file);
+                        files[inputName] = {
+                            filename: file.name,
+                            content: content
+                        };
+                    } else {
+                        throw new Error(`Missing file: ${inputName}`);
+                    }
+                }
+
+                // Send as JSON
                 const response = await fetch(`${window.APP_CONFIG.API_URL}/calculate`, {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ files })
                 });
 
                 const data = await response.json();
@@ -198,7 +232,7 @@
                 }
             } catch (error) {
                 document.getElementById('loading').classList.add('hidden');
-                document.getElementById('error-message').textContent = 'Network error: ' + error.message;
+                document.getElementById('error-message').textContent = 'Error: ' + error.message;
                 document.getElementById('error-display').classList.remove('hidden');
             }
         });

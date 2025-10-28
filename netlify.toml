@@ -1,10 +1,14 @@
 [build]
-  command = "pip install -r requirements.txt -t netlify/functions/lib"
+  command = "echo 'No build step needed for static site'"
   functions = "netlify/functions"
   publish = "public"
 
 [build.environment]
   PYTHON_VERSION = "3.11"
+
+[functions]
+  external_node_modules = []
+  included_files = ["netlify/functions/**"]
 
 [[redirects]]
   from = "/api/*"

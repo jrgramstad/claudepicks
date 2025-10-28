@@ -1,13 +1,10 @@
-// API Configuration
-// Update API_URL to your Render backend URL after deployment
+// API Configuration for Netlify Functions
 const CONFIG = {
-    // For local development:
-    // API_URL: 'http://localhost:5000'
-
-    // For production (update with your Render URL):
+    // For Netlify: Functions are served from /.netlify/functions
+    // The netlify.toml redirects /api/* to /.netlify/functions/*
     API_URL: window.location.hostname === 'localhost'
-        ? 'http://localhost:5000'
-        : 'https://YOUR-APP-NAME.onrender.com'
+        ? 'http://localhost:8888/api'  // Netlify Dev local server
+        : '/api'  // Production: relative path uses current domain
 };
 
 // Export for use in index.html
