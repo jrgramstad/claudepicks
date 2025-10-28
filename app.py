@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_file
+from flask_cors import CORS
 import pandas as pd
 from rapidfuzz import fuzz, process
 import io
@@ -9,6 +10,15 @@ from typing import Dict, List, Tuple, Optional
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Enable CORS for Netlify frontend
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*"],  # In production, restrict to your Netlify domain
+        "methods": ["GET", "POST"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # BBM column mapping
 BBM_COLUMNS = {

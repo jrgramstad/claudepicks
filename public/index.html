@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBA Pick'em Edge Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <style>
+        .results-output {
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">🏀 NBA Pick'em Edge Calculator</h1>
+            <p class="text-gray-600">Upload your daily prediction files to calculate edges across 5 betting sites</p>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Upload Files</h2>
+
+            <form id="upload-form" enctype="multipart/form-data">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <!-- PrizePicks -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            PrizePicks CSV
+                        </label>
+                        <input type="file"
+                               name="prizepicks"
+                               accept=".csv"
+                               required
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+
+                    <!-- Underdog -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Underdog CSV
+                        </label>
+                        <input type="file"
+                               name="underdog"
+                               accept=".csv"
+                               required
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+
+                    <!-- Pick6 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Pick6 CSV
+                        </label>
+                        <input type="file"
+                               name="pick6"
+                               accept=".csv"
+                               required
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+
+                    <!-- Sleeper -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Sleeper CSV
+                        </label>
+                        <input type="file"
+                               name="sleeper"
+                               accept=".csv"
+                               required
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+
+                    <!-- FanDuel -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            FanDuel CSV
+                        </label>
+                        <input type="file"
+                               name="fanduel"
+                               accept=".csv"
+                               required
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+
+                    <!-- BBM Daily -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            BBM Daily File (CSV or XLS)
+                        </label>
+                        <input type="file"
+                               name="bbm"
+                               accept=".csv,.xls,.xlsx"
+                               required
+                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex justify-center">
+                    <button type="submit"
+                            id="calculate-btn"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg shadow-md transition duration-200">
+                        Calculate Edges
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded">
+            <div class="flex items-center">
+                <svg class="animate-spin h-5 w-5 mr-3 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="text-blue-700 font-medium">Calculating edges...</span>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="error-display" class="hidden bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded">
+            <div class="flex items-center">
+                <svg class="h-5 w-5 text-red-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                </svg>
+                <span id="error-message" class="text-red-700 font-medium"></span>
+            </div>
+        </div>
+
+        <!-- Success Display -->
+        <div id="success-display" class="hidden">
+            <!-- Download Button -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Results Ready</h3>
+                        <p class="text-sm text-gray-600">Date: <span id="result-date"></span></p>
+                    </div>
+                    <button id="download-csv-btn"
+                            class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-200">
+                        📥 Download CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Output -->
+            <div class="bg-gray-900 rounded-lg shadow-md p-6 overflow-x-auto">
+                <pre id="results-output" class="results-output text-green-400 text-sm"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let csvData = '';
+        let dateStr = '';
+
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Hide previous results/errors
+            document.getElementById('error-display').classList.add('hidden');
+            document.getElementById('success-display').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+
+            const formData = new FormData(e.target);
+
+            try {
+                const response = await fetch(`${window.APP_CONFIG.API_URL}/calculate`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                document.getElementById('loading').classList.add('hidden');
+
+                if (response.ok && data.success) {
+                    // Show success
+                    csvData = data.csv;
+                    dateStr = data.date;
+
+                    document.getElementById('result-date').textContent = dateStr;
+                    document.getElementById('results-output').textContent = data.output;
+                    document.getElementById('success-display').classList.remove('hidden');
+
+                    // Scroll to results
+                    document.getElementById('success-display').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    // Show error
+                    document.getElementById('error-message').textContent = data.error || 'An error occurred';
+                    document.getElementById('error-display').classList.remove('hidden');
+                }
+            } catch (error) {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error-message').textContent = 'Network error: ' + error.message;
+                document.getElementById('error-display').classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('download-csv-btn').addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${window.APP_CONFIG.API_URL}/download-csv`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        csv: csvData,
+                        date: dateStr
+                    })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `top_picks_${dateStr}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    alert('Error downloading CSV');
+                }
+            } catch (error) {
+                alert('Error downloading CSV: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
