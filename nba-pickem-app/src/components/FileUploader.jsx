@@ -1,6 +1,6 @@
 /**
- * File Uploader Component - Polished Version
- * Clear feedback with filenames and checkmarks
+ * Compact File Uploader - Inline Layout
+ * Fits everything tightly with clear visual feedback
  */
 
 import { useState } from 'react';
@@ -24,103 +24,78 @@ export default function FileUploader({ onFilesSelected }) {
   const allFilesSelected = Object.values(files).every(f => f !== null);
   const filesCount = Object.values(files).filter(f => f !== null).length;
 
-  const FileInput = ({ label, site, accept }) => {
-    const hasFile = files[site] !== null;
-
-    return (
-      <div className="flex items-center justify-between py-3 px-4 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors">
-        <div className="flex items-center space-x-3 flex-1">
-          <span className={`text-2xl ${hasFile ? 'text-green-500' : 'text-gray-300'}`}>
-            {hasFile ? '✓' : '○'}
-          </span>
-          <label className="text-sm font-medium text-gray-700 min-w-[120px]">
-            {label}:
-          </label>
-          {hasFile ? (
-            <span className="text-sm text-green-600 font-medium truncate flex-1">
-              {files[site].name}
-            </span>
-          ) : (
-            <span className="text-sm text-gray-400 italic">
-              Not uploaded
-            </span>
-          )}
-        </div>
-        <label className={`px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all
-          ${hasFile
-            ? 'bg-green-100 text-green-700 hover:bg-green-200'
-            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-          }`}>
-          {hasFile ? 'Change' : 'Choose File'}
-          <input
-            type="file"
-            accept={accept}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFileChange(site, file);
-            }}
-            className="hidden"
-          />
-        </label>
-      </div>
-    );
-  };
+  const fileInputs = [
+    { label: 'PrizePicks', site: 'prizepicks', accept: '.csv', color: 'text-green-600' },
+    { label: 'Underdog', site: 'underdog', accept: '.csv', color: 'text-blue-600' },
+    { label: 'Pick6', site: 'pick6', accept: '.csv', color: 'text-purple-600' },
+    { label: 'Sleeper', site: 'sleeper', accept: '.csv', color: 'text-orange-600' },
+    { label: 'FanDuel', site: 'fanduel', accept: '.csv', color: 'text-red-600' },
+    { label: 'BBM Daily', site: 'bbm', accept: '.xls,.xlsx,.csv', color: 'text-gray-700' }
+  ];
 
   return (
-    <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-      <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center">
-          📁 Upload Files
-        </h2>
-        <p className="text-sm text-gray-600 mt-1">
-          Upload 6 files to calculate edges (include YYYY-MM-DD in filenames)
-        </p>
-      </div>
+    <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
+      <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center justify-between">
+        <span>📁 Upload Files</span>
+        <span className="text-sm font-normal text-gray-600">
+          {filesCount}/6 uploaded
+        </span>
+      </h2>
 
-      <div className="divide-y divide-gray-200">
-        <FileInput label="PrizePicks CSV" site="prizepicks" accept=".csv" />
-        <FileInput label="Underdog CSV" site="underdog" accept=".csv" />
-        <FileInput label="Pick6 CSV" site="pick6" accept=".csv" />
-        <FileInput label="Sleeper CSV" site="sleeper" accept=".csv" />
-        <FileInput label="FanDuel CSV" site="fanduel" accept=".csv" />
-        <FileInput label="BBM Daily File" site="bbm" accept=".xls,.xlsx,.csv" />
-      </div>
+      <div className="space-y-1">
+        {fileInputs.map(({ label, site, accept, color }) => {
+          const hasFile = files[site] !== null;
 
-      <div className="p-4 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            {allFilesSelected ? (
-              <>
-                <span className="text-2xl">🎉</span>
-                <span className="text-sm font-semibold text-green-600">
-                  All files uploaded! Ready to calculate.
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-2xl">📊</span>
-                <span className="text-sm text-gray-600">
-                  {filesCount} of 6 files uploaded
-                </span>
-              </>
-            )}
-          </div>
+          return (
+            <div key={site} className="flex items-center gap-2 p-2 border border-gray-200 rounded hover:bg-gray-50 transition-colors">
+              <div className={`w-28 font-semibold text-sm ${color}`}>
+                {label}
+              </div>
 
-          {allFilesSelected && (
-            <div className="flex space-x-2">
-              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse delay-75"></div>
-              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse delay-150"></div>
+              <div className="flex-1 text-sm truncate">
+                {hasFile ? (
+                  <span className="text-gray-700">{files[site].name}</span>
+                ) : (
+                  <span className="text-gray-400 italic">Not uploaded</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {hasFile && (
+                  <span className="text-green-600 font-bold text-lg">✓</span>
+                )}
+                <label className={`px-3 py-1 rounded text-xs font-bold cursor-pointer transition-all ${
+                  hasFile
+                    ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}>
+                  {hasFile ? 'Change' : 'Upload'}
+                  <input
+                    type="file"
+                    accept={accept}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileChange(site, file);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
-          )}
-        </div>
-
-        {!allFilesSelected && (
-          <div className="mt-2 text-xs text-gray-500">
-            Please upload all 6 files to enable edge calculation
-          </div>
-        )}
+          );
+        })}
       </div>
+
+      {allFilesSelected && (
+        <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-green-600 font-bold text-lg">✓</span>
+            <span className="text-green-700 font-semibold text-sm">
+              All files ready to process
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,10 +12,10 @@ import Fuse from 'fuse.js';
 const BBM_STAT_MAP = {
   'PTS': 'p', 'REB': 'r', 'AST': 'a', 'STL': 's', 'BLK': 'b', 'TO': 'to',
   '3PT': '3', '3PA': '3a', 'FG': 'fg', 'FGA': 'fga', 'FT': 'ft', 'FTA': 'fta',
-  'OR': 'or', 'DR': 'dr', '2PT': '2'
+  'OR': 'or', 'DR': 'dr', '2PT': '2', 'PF': 'pf'
 };
 
-const SKIP_MARKETS = ['Fantasy Score', 'Fantasy Points', 'Double-Double', 'Triple-Double'];
+const SKIP_MARKETS = ['Fantasy Score', 'Fantasy Points', 'Double-Double', 'Triple-Double', 'Fantasy Pts'];
 
 // ========== MARKET PARSING ==========
 
@@ -43,15 +43,20 @@ function parseMarket(marketName) {
 
   // Single stat markets
   const upperMarket = market.toUpperCase();
+
+  // Check specific patterns first
+  if (upperMarket.includes("FIELD GOAL ATTEMPTS") || upperMarket.includes("FG ATTEMPTED")) return ['FGA'];
+  if (upperMarket.includes("FIELD GOALS MADE") || upperMarket === "FG") return ['FG'];
+  if (upperMarket.includes("FREE THROW ATTEMPTS") || upperMarket.includes("FT ATTEMPTED")) return ['FTA'];
+  if (upperMarket.includes("FREE THROWS MADE") || upperMarket === "FT") return ['FT'];
+  if (upperMarket.includes("PERSONAL FOULS") || upperMarket.includes("FOULS") || upperMarket === "PF") return ['PF'];
+
+  // General patterns
   if (upperMarket.includes("POINTS") || upperMarket === "PTS") return ['PTS'];
   if (upperMarket.includes("ASSISTS") || upperMarket === "AST") return ['AST'];
   if (upperMarket.includes("STEALS") || upperMarket === "STL") return ['STL'];
   if (upperMarket.includes("BLOCKS") || upperMarket === "BLK") return ['BLK'];
   if (upperMarket.includes("TURNOVERS") || upperMarket === "TO") return ['TO'];
-  if (upperMarket.includes("FIELD GOALS MADE") || upperMarket === "FG") return ['FG'];
-  if (upperMarket.includes("FIELD GOAL ATTEMPTS") || upperMarket === "FGA") return ['FGA'];
-  if (upperMarket.includes("FREE THROWS MADE") || upperMarket === "FT") return ['FT'];
-  if (upperMarket.includes("FREE THROW ATTEMPTS") || upperMarket.includes("FT ATTEMPTED") || upperMarket === "FTA") return ['FTA'];
 
   return null;
 }
