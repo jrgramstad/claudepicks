@@ -11,11 +11,11 @@ import Fuse from 'fuse.js';
 
 const BBM_STAT_MAP = {
   'PTS': 'p', 'REB': 'r', 'AST': 'a', 'STL': 's', 'BLK': 'b', 'TO': 'to',
-  '3PT': '3', '3PA': '3a', 'FG': 'fg', 'FGA': 'fga', 'FT': 'ft',
-  'OR': 'or', 'DR': 'dr'
+  '3PT': '3', '3PA': '3a', 'FG': 'fg', 'FGA': 'fga', 'FT': 'ft', 'FTA': 'fta',
+  'OR': 'or', 'DR': 'dr', '2PT': '2'
 };
 
-const SKIP_MARKETS = ['Fantasy Score', 'Fantasy Points'];
+const SKIP_MARKETS = ['Fantasy Score', 'Fantasy Points', 'Double-Double', 'Triple-Double'];
 
 // ========== MARKET PARSING ==========
 
@@ -32,6 +32,7 @@ function parseMarket(marketName) {
   if (market === "Rebounds" || market === "Total Rebounds") return ['REB'];
   if (market === "3PT Attempts" || market === "3-PT Attempts") return ['3PA'];
   if (market === "3PT Made" || market === "3-PT Made" || market === "3-Pointers Made") return ['3PT'];
+  if (market === "2PT Made" || market === "2-PT Made" || market === "2-Pointers Made") return ['2PT'];
 
   // Combo markets
   if (market === "PTS+REB+AST" || market === "Pts+Reb+Ast") return ['PTS', 'REB', 'AST'];
@@ -50,6 +51,7 @@ function parseMarket(marketName) {
   if (upperMarket.includes("FIELD GOALS MADE") || upperMarket === "FG") return ['FG'];
   if (upperMarket.includes("FIELD GOAL ATTEMPTS") || upperMarket === "FGA") return ['FGA'];
   if (upperMarket.includes("FREE THROWS MADE") || upperMarket === "FT") return ['FT'];
+  if (upperMarket.includes("FREE THROW ATTEMPTS") || upperMarket.includes("FT ATTEMPTED") || upperMarket === "FTA") return ['FTA'];
 
   return null;
 }
