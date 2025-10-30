@@ -189,6 +189,14 @@ function processSite(siteName, siteRows, bbmPlayers, fuseIndex) {
   const picks = [];
   let processed = 0;
   let matched = 0;
+  let marketParseFailed = 0;
+  let projectionFailed = 0;
+
+  // Debug: Log first row to see column names
+  if (siteName === 'PrizePicks' && siteRows.length > 0) {
+    console.log(`[${siteName}] First row columns:`, Object.keys(siteRows[0]));
+    console.log(`[${siteName}] First row data:`, siteRows[0]);
+  }
 
   for (const row of siteRows) {
     processed++;
@@ -197,7 +205,12 @@ function processSite(siteName, siteRows, bbmPlayers, fuseIndex) {
     const marketName = row['Market Name'] || row.market || row.MARKET;
     const line = parseFloat(row.Line || row.line);
 
-    if (!playerName || !marketName || isNaN(line)) continue;
+    if (!playerName || !marketName || isNaN(line)) {
+      if (siteName === 'PrizePicks' && processed <= 3) {
+        console.log(`[${siteName}] Row ${processed} missing data:`, { playerName, marketName, line, raw: row });
+      }
+      continue;
+    }
 
     const bbmPlayer = findBBMPlayer(playerName, bbmPlayers, fuseIndex);
     if (!bbmPlayer) continue;
@@ -205,10 +218,19 @@ function processSite(siteName, siteRows, bbmPlayers, fuseIndex) {
     matched++;
 
     const stats = parseMarket(marketName);
-    if (!stats) continue;
+    if (!stats) {
+      marketParseFailed++;
+      if (siteName === 'PrizePicks' && marketParseFailed <= 5) {
+        console.log(`[${siteName}] Market parse failed:`, marketName);
+      }
+      continue;
+    }
 
     const projection = calculateProjection(bbmPlayer, stats);
-    if (projection === null) continue;
+    if (projection === null) {
+      projectionFailed++;
+      continue;
+    }
 
     const { edge, direction, absoluteEdge } = calculateEdge(line, projection);
 
@@ -220,6 +242,16 @@ function processSite(siteName, siteRows, bbmPlayers, fuseIndex) {
       edge,
       direction,
       absoluteEdge
+    });
+  }
+
+  if (siteName === 'PrizePicks') {
+    console.log(`[${siteName}] Processing complete:`, {
+      processed,
+      matched,
+      marketParseFailed,
+      projectionFailed,
+      totalPicks: picks.length
     });
   }
 
