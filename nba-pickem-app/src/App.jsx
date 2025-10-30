@@ -1,13 +1,12 @@
 /**
- * NBA Pick'em Edge Calculator - Compact Design
- * Uses Web Worker for background processing with tabbed results
+ * NBA Pick'em Edge Calculator - Professional Design
+ * Beautiful gradients, modern UI, loading modal
  */
 
 import { useState, useRef } from 'react';
 import FileUploader from './components/FileUploader';
 import TabbedResults from './components/TabbedResults';
 import ErrorDisplay from './components/ErrorDisplay';
-import ProgressDisplay from './components/ProgressDisplay';
 import { exportToCSV } from './utils/csvExport';
 import ProcessorWorker from './workers/processor.worker.js?worker';
 
@@ -17,7 +16,8 @@ function App() {
   const [date, setDate] = useState(null);
   const [error, setError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState([]);
+  const [progress, setProgress] = useState(0);
+  const [currentSite, setCurrentSite] = useState('');
 
   const workerRef = useRef(null);
 
@@ -27,7 +27,6 @@ function App() {
     setFiles(newFiles);
     setError(null);
     setResults({});
-    setProgress([]);
   };
 
   const extractDate = (filename) => {
@@ -39,14 +38,13 @@ function App() {
     setIsProcessing(true);
     setError(null);
     setResults({});
-    setProgress([]);
+    setProgress(0);
+    setCurrentSite('');
 
     try {
       const firstFile = files.prizepicks || files.bbm;
       const extractedDate = extractDate(firstFile.name);
       setDate(extractedDate);
-
-      addProgress('Starting processing...');
 
       // Read file contents
       const fileContents = {};
@@ -68,24 +66,24 @@ function App() {
         }
       }
 
-      addProgress('Files loaded, starting calculations...');
-
       // Create and start Web Worker
       workerRef.current = new ProcessorWorker();
 
-      workerRef.current.onmessage = (e) => {
-        const { type, siteName, results: siteResults, message, stats, error: workerError } = e.data;
+      let completedSites = 0;
+      const totalSites = 5;
 
-        if (type === 'PROGRESS') {
-          addProgress(message);
-        } else if (type === 'SITE_COMPLETE') {
+      workerRef.current.onmessage = (e) => {
+        const { type, siteName, results: siteResults, error: workerError } = e.data;
+
+        if (type === 'SITE_COMPLETE') {
+          completedSites++;
+          setProgress(completedSites);
+          setCurrentSite(siteName);
           setResults(prev => ({
             ...prev,
             [siteName]: siteResults
           }));
-          addProgress(`✓ ${siteName} complete (${stats.totalEdges} edges from ${stats.matched} players)`);
         } else if (type === 'COMPLETE') {
-          addProgress('🎉 All calculations complete!');
           setIsProcessing(false);
           workerRef.current.terminate();
         } else if (type === 'ERROR') {
@@ -113,10 +111,6 @@ function App() {
     }
   };
 
-  const addProgress = (message) => {
-    setProgress(prev => [...prev, { message, time: new Date().toLocaleTimeString() }]);
-  };
-
   const handleDownloadCSV = () => {
     if (Object.keys(results).length > 0) {
       exportToCSV(results, date);
@@ -124,78 +118,83 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-4 px-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Compact Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg shadow-lg p-4 mb-4 text-white">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-2xl p-8 mb-8 text-white">
+          <div className="flex items-center gap-4">
+            <div className="text-6xl">🏀</div>
             <div>
-              <h1 className="text-2xl font-bold">
-                🏀 NBA Pick'em Edge Calculator
-              </h1>
-              <p className="text-blue-100 text-sm">
-                High-performance edge calculation • Results in seconds
-              </p>
+              <h1 className="text-4xl font-bold">NBA Pick'em Edge Calculator</h1>
+              <p className="text-blue-100 mt-2">High-performance edge calculation • Results in seconds</p>
+              {date && (
+                <p className="text-blue-200 text-sm mt-1 font-mono">Date: {date}</p>
+              )}
             </div>
-            {date && (
-              <div className="bg-white/20 px-4 py-2 rounded-lg">
-                <div className="text-xs text-blue-100">Date</div>
-                <div className="font-mono font-bold">{date}</div>
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left Column - Upload & Calculate */}
-          <div className="lg:col-span-1 space-y-4">
-            <FileUploader onFilesSelected={handleFilesSelected} />
+        {/* Upload Card */}
+        <FileUploader onFilesSelected={handleFilesSelected} />
 
-            {allFilesSelected && Object.keys(results).length === 0 && !isProcessing && (
-              <button
-                onClick={handleCalculate}
-                className="w-full px-6 py-4 rounded-lg font-bold text-white text-lg
-                  bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700
-                  active:scale-95 transition-all shadow-lg"
-              >
-                ⚡ Calculate Edges
-              </button>
-            )}
-
-            {isProcessing && <ProgressDisplay progress={progress} />}
-            {error && <ErrorDisplay error={error} />}
+        {/* Calculate Button */}
+        {allFilesSelected && Object.keys(results).length === 0 && !isProcessing && (
+          <div className="my-8 text-center">
+            <button
+              onClick={handleCalculate}
+              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold text-xl px-12 py-4 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+            >
+              ⚡ Calculate Edges
+            </button>
           </div>
+        )}
 
-          {/* Right Column - Results */}
-          <div className="lg:col-span-2">
-            {Object.keys(results).length > 0 && (
-              <TabbedResults
-                results={results}
-                onDownloadCSV={handleDownloadCSV}
-              />
-            )}
-
-            {Object.keys(results).length === 0 && !isProcessing && !error && (
-              <div className="bg-white rounded-lg shadow-md p-12 text-center">
-                <div className="text-6xl mb-4">📊</div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Ready to Calculate
-                </h3>
-                <p className="text-gray-600">
-                  Upload all 6 files and click "Calculate Edges" to see results
-                </p>
-              </div>
-            )}
+        {/* Error Display */}
+        {error && (
+          <div className="my-8">
+            <ErrorDisplay error={error} />
           </div>
-        </div>
+        )}
+
+        {/* Results */}
+        {Object.keys(results).length > 0 && !isProcessing && (
+          <div className="my-8">
+            <TabbedResults
+              results={results}
+              onDownloadCSV={handleDownloadCSV}
+            />
+          </div>
+        )}
 
         {/* Footer */}
-        <div className="mt-4 text-center text-xs text-gray-600 bg-white rounded-lg p-3 shadow-sm">
-          <p>
-            All processing happens in your browser • No data uploaded • Fast & private
-          </p>
+        <div className="text-center text-gray-500 text-sm mt-8">
+          <p>🔒 All processing happens in your browser • No data uploaded • Fast & private</p>
         </div>
+
       </div>
+
+      {/* Loading Modal */}
+      {isProcessing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4 animate-bounce">⚡</div>
+              <h3 className="text-2xl font-bold mb-2">Calculating Edges</h3>
+              <p className="text-gray-600 mb-4">
+                {currentSite ? `Processing ${currentSite}...` : 'Starting...'}
+                <span className="block mt-1">({progress}/5 sites)</span>
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500"
+                  style={{ width: `${(progress / 5) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
