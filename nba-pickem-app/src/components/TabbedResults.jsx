@@ -66,7 +66,8 @@ export default function TabbedResults({ results, onDownloadCSV }) {
                 <th className="px-4 py-3 text-center font-bold">Direction</th>
                 <th className="px-4 py-3 text-center font-bold">Line</th>
                 <th className="px-4 py-3 text-center font-bold">BBM</th>
-                <th className="px-4 py-3 text-right rounded-tr-lg font-bold">Edge</th>
+                <th className="px-4 py-3 text-right font-bold">Edge</th>
+                <th className="px-4 py-3 text-right rounded-tr-lg font-bold">Edge %</th>
               </tr>
             </thead>
             <tbody>
@@ -100,6 +101,11 @@ export default function TabbedResults({ results, onDownloadCSV }) {
                   <td className="px-4 py-3 text-right">
                     <span className="font-bold text-lg text-green-600">
                       {pick.edge > 0 ? '+' : ''}{pick.edge}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="font-bold text-purple-600">
+                      {pick.edgePercentage?.toFixed(1)}%
                     </span>
                   </td>
                 </tr>

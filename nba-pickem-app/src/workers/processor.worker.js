@@ -133,12 +133,68 @@ function findBBMPlayer(rotowireName, bbmPlayers, fuseIndex) {
 
 // ========== RANKING ==========
 
-function rankPicks(picks) {
+function rankPicks(picks, siteName) {
   if (!picks || picks.length === 0) {
     return { top5: [], bestUnder: null };
   }
 
-  const sorted = [...picks].sort((a, b) => b.absoluteEdge - a.absoluteEdge);
+  // Add percentage edge to each pick
+  picks.forEach(pick => {
+    pick.edgePercentage = (pick.absoluteEdge / pick.line) * 100;
+  });
+
+  // ========== MARKET TYPE ANALYSIS ==========
+  const marketTypes = {
+    single: [],
+    combo2: [],
+    combo3: []
+  };
+
+  picks.forEach(pick => {
+    const statCount = pick.market.split('+').length;
+
+    if (statCount === 1) {
+      marketTypes.single.push(pick);
+    } else if (statCount === 2) {
+      marketTypes.combo2.push(pick);
+    } else if (statCount === 3) {
+      marketTypes.combo3.push(pick);
+    }
+  });
+
+  if (siteName) {
+    console.log(`\n=== ${siteName} MARKET TYPE ANALYSIS ===`);
+    console.log('Market type counts:');
+    console.log('- Single stats:', marketTypes.single.length);
+    console.log('- 2-stat combos:', marketTypes.combo2.length);
+    console.log('- 3-stat combos:', marketTypes.combo3.length);
+
+    // Show top edges by absolute value
+    const allSortedByAbs = [...picks].sort((a, b) => b.absoluteEdge - a.absoluteEdge);
+    console.log('\nTop 10 by ABSOLUTE edge:');
+    allSortedByAbs.slice(0, 10).forEach((e, i) => {
+      console.log(`${i+1}. ${e.player} - ${e.market} | Edge: ${e.edge > 0 ? '+' : ''}${e.edge} | Line: ${e.line} | ${e.edgePercentage.toFixed(1)}%`);
+    });
+
+    // Show top edges by percentage
+    const allSortedByPct = [...picks].sort((a, b) => b.edgePercentage - a.edgePercentage);
+    console.log('\nTop 10 by PERCENTAGE edge:');
+    allSortedByPct.slice(0, 10).forEach((e, i) => {
+      console.log(`${i+1}. ${e.player} - ${e.market} | Edge: ${e.edge > 0 ? '+' : ''}${e.edge} | Line: ${e.line} | ${e.edgePercentage.toFixed(1)}%`);
+    });
+
+    // Sample single-stat edges
+    if (marketTypes.single.length > 0) {
+      const singlesSorted = [...marketTypes.single].sort((a, b) => b.edgePercentage - a.edgePercentage);
+      console.log('\nTop 5 SINGLE-STAT edges (by %):');
+      singlesSorted.slice(0, 5).forEach((e, i) => {
+        console.log(`${i+1}. ${e.player} - ${e.market} | Edge: ${e.edge > 0 ? '+' : ''}${e.edge} | Line: ${e.line} | ${e.edgePercentage.toFixed(1)}%`);
+      });
+    }
+  }
+
+  // ========== RANKING BY PERCENTAGE EDGE ==========
+  const sorted = [...picks].sort((a, b) => b.edgePercentage - a.edgePercentage);
 
   const seenPlayers = new Set();
   const uniquePicks = [];
@@ -255,7 +311,7 @@ function processSite(siteName, siteRows, bbmPlayers, fuseIndex) {
     });
   }
 
-  const ranked = rankPicks(picks);
+  const ranked = rankPicks(picks, siteName);
 
   return {
     siteName,
