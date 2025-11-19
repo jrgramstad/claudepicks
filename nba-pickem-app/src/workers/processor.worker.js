@@ -324,6 +324,38 @@ function processSite(siteName, siteRows, bbmPlayers, fuseIndex) {
   };
 }
 
+// ========== LADDERS CALCULATION (Underdog Points Only) ==========
+
+function calculateLadders(allEdges) {
+  // Filter to Points market only
+  const pointsOnly = allEdges.filter(edge =>
+    edge.market.toLowerCase() === 'points'
+  );
+
+  // Filter to positive edges only (Overs)
+  const positiveEdges = pointsOnly.filter(edge => edge.edge > 0);
+
+  // Sort by absolute edge (Points value)
+  const byAbsolute = [...positiveEdges]
+    .sort((a, b) => b.absoluteEdge - a.absoluteEdge)
+    .slice(0, 10)
+    .map(pick => ({
+      ...pick,
+      edgePercent: (pick.absoluteEdge / pick.line) * 100
+    }));
+
+  // Sort by percentage edge
+  const byPercent = [...positiveEdges]
+    .map(pick => ({
+      ...pick,
+      edgePercent: (pick.absoluteEdge / pick.line) * 100
+    }))
+    .sort((a, b) => b.edgePercent - a.edgePercent)
+    .slice(0, 10);
+
+  return { byAbsolute, byPercent };
+}
+
 // ========== MESSAGE HANDLER ==========
 
 self.onmessage = async function(e) {
@@ -331,7 +363,19 @@ self.onmessage = async function(e) {
 
   try {
     if (type === 'PROCESS_FILES') {
-      const { files } = data;
+      const { files, selectedSites } = data;
+
+      // Map site IDs to display names
+      const siteIdToName = {
+        'prizepicks': 'PrizePicks',
+        'underdog': 'Underdog',
+        'pick6': 'Pick6',
+        'sleeper': 'Sleeper',
+        'fanduel': 'FanDuel'
+      };
+
+      // Determine which sites to process (use selectedSites or default to all)
+      const sitesToProcess = selectedSites || ['prizepicks', 'underdog', 'pick6', 'sleeper', 'fanduel'];
 
       // Progress: Starting
       self.postMessage({ type: 'PROGRESS', step: 'parsing', message: 'Parsing files...' });
@@ -360,16 +404,14 @@ self.onmessage = async function(e) {
       };
       const fuseIndex = new Fuse(bbmData, fuseOptions);
 
-      // Parse site CSVs
+      // Parse site CSVs (only for selected sites)
       const siteData = {};
-      const siteNames = ['PrizePicks', 'Underdog', 'Pick6', 'Sleeper', 'FanDuel'];
-      const fileKeys = ['prizepicks', 'underdog', 'pick6', 'sleeper', 'fanduel'];
 
-      for (let i = 0; i < siteNames.length; i++) {
-        const siteName = siteNames[i];
-        const fileKey = fileKeys[i];
-        const file = files[fileKey];
+      for (const siteId of sitesToProcess) {
+        const file = files[siteId];
+        if (!file) continue;
 
+        const siteName = siteIdToName[siteId];
         const csvData = await parseCSV(file.content);
         siteData[siteName] = csvData;
 
@@ -383,7 +425,10 @@ self.onmessage = async function(e) {
       // Process each site progressively
       const allResults = {};
 
-      for (const siteName of siteNames) {
+      for (const siteId of sitesToProcess) {
+        const siteName = siteIdToName[siteId];
+        if (!siteData[siteName]) continue;
+
         self.postMessage({
           type: 'PROGRESS',
           step: 'processing_site',
@@ -392,6 +437,44 @@ self.onmessage = async function(e) {
         });
 
         const result = processSite(siteName, siteData[siteName], bbmData, fuseIndex);
+
+        // For Underdog, also calculate Ladders
+        if (siteId === 'underdog') {
+          // Get all edges for Ladders calculation
+          const allEdges = [];
+          for (const row of siteData[siteName]) {
+            const playerName = row.Player || row.player || row.NAME || row.name;
+            const marketName = row['Market Name'] || row.market || row.MARKET;
+            const line = parseFloat(row.Line || row.line);
+
+            if (!playerName || !marketName || isNaN(line)) continue;
+
+            const bbmPlayer = findBBMPlayer(playerName, bbmData, fuseIndex);
+            if (!bbmPlayer) continue;
+
+            const stats = parseMarket(marketName);
+            if (!stats) continue;
+
+            const projection = calculateProjection(bbmPlayer, stats);
+            if (projection === null) continue;
+
+            const { edge, direction, absoluteEdge } = calculateEdge(line, projection);
+
+            allEdges.push({
+              player: playerName,
+              market: marketName,
+              line,
+              projection: parseFloat(projection.toFixed(2)),
+              edge,
+              direction,
+              absoluteEdge
+            });
+          }
+
+          const ladders = calculateLadders(allEdges);
+          result.results.ladders = ladders;
+        }
+
         allResults[siteName] = result.results;
 
         // Send this site's results immediately

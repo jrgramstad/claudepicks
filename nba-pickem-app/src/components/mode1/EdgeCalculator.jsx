@@ -1,9 +1,10 @@
 /**
  * NBA Pick'em Edge Calculator - Mode 1
  * Calculate edges from BBM projections and site lines
+ * Features: Flexible site selection, Underdog Ladders mode
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import FileUploader from './FileUploader';
 import TabbedResults from './TabbedResults';
 import ErrorDisplay from './ErrorDisplay';
@@ -11,7 +12,43 @@ import { exportToCSV } from '../../utils/csvExport';
 import { saveTop25ToCache } from '../../utils/matching';
 import ProcessorWorker from '../../workers/processor.worker.js?worker';
 
+// Site configuration
+const SITES = [
+  { id: 'underdog', name: 'Underdog', color: 'bg-blue-500' },
+  { id: 'sleeper', name: 'Sleeper', color: 'bg-orange-500' },
+  { id: 'prizepicks', name: 'PrizePicks', color: 'bg-green-500' },
+  { id: 'pick6', name: 'Pick6', color: 'bg-purple-500' },
+  { id: 'fanduel', name: 'FanDuel', color: 'bg-red-500' }
+];
+
+// localStorage helpers
+const loadPreferences = () => {
+  try {
+    const saved = localStorage.getItem('pickem-selected-sites');
+    if (saved) {
+      const { sites } = JSON.parse(saved);
+      return sites;
+    }
+  } catch (e) {
+    console.error('Failed to load preferences:', e);
+  }
+  // Default: all sites selected
+  return ['underdog', 'sleeper', 'prizepicks', 'pick6', 'fanduel'];
+};
+
+const savePreferences = (sites) => {
+  try {
+    localStorage.setItem('pickem-selected-sites', JSON.stringify({
+      sites,
+      lastUpdated: new Date().toISOString()
+    }));
+  } catch (e) {
+    console.error('Failed to save preferences:', e);
+  }
+};
+
 export default function EdgeCalculator() {
+  const [selectedSites, setSelectedSites] = useState(() => loadPreferences());
   const [files, setFiles] = useState({});
   const [results, setResults] = useState({});
   const [date, setDate] = useState(null);
@@ -22,7 +59,34 @@ export default function EdgeCalculator() {
 
   const workerRef = useRef(null);
 
-  const allFilesSelected = Object.values(files).every(f => f !== null);
+  // Check if all required files are uploaded
+  const requiredFiles = selectedSites.length + 1; // selected sites + BBM
+  const uploadedFiles = [
+    ...selectedSites.map(site => files[site]),
+    files.bbm
+  ].filter(Boolean).length;
+  const canCalculate = uploadedFiles === requiredFiles && selectedSites.length > 0;
+
+  const handleSiteToggle = (siteId, checked) => {
+    const updated = checked
+      ? [...selectedSites, siteId]
+      : selectedSites.filter(id => id !== siteId);
+
+    setSelectedSites(updated);
+    savePreferences(updated);
+
+    // Clear file if site unchecked
+    if (!checked && files[siteId]) {
+      setFiles(prev => {
+        const newFiles = { ...prev };
+        delete newFiles[siteId];
+        return newFiles;
+      });
+    }
+
+    // Clear results when selection changes
+    setResults({});
+  };
 
   const handleFilesSelected = (newFiles) => {
     setFiles(newFiles);
@@ -43,14 +107,18 @@ export default function EdgeCalculator() {
     setCurrentSite('');
 
     try {
-      const firstFile = files.prizepicks || files.bbm;
+      // Find first available file for date extraction
+      const firstFile = files[selectedSites[0]] || files.bbm;
       const extractedDate = extractDate(firstFile.name);
       setDate(extractedDate);
 
-      // Read file contents
+      // Read file contents for selected sites only
       const fileContents = {};
       for (const [key, file] of Object.entries(files)) {
         if (!file) continue;
+
+        // Skip sites that aren't selected
+        if (key !== 'bbm' && !selectedSites.includes(key)) continue;
 
         if (key === 'bbm' && !file.name.endsWith('.csv')) {
           const buffer = await file.arrayBuffer();
@@ -71,7 +139,7 @@ export default function EdgeCalculator() {
       workerRef.current = new ProcessorWorker();
 
       let completedSites = 0;
-      const totalSites = 5;
+      const totalSites = selectedSites.length;
 
       workerRef.current.onmessage = async (e) => {
         const { type, siteName, results: siteResults, error: workerError, results: allResults } = e.data;
@@ -106,7 +174,10 @@ export default function EdgeCalculator() {
 
       workerRef.current.postMessage({
         type: 'PROCESS_FILES',
-        data: { files: fileContents }
+        data: {
+          files: fileContents,
+          selectedSites: selectedSites
+        }
       });
 
     } catch (err) {
@@ -140,17 +211,76 @@ export default function EdgeCalculator() {
           </div>
         </div>
 
+        {/* Site Selection */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <h2 className="text-xl font-bold mb-4 text-gray-800">
+            🎯 Select Sites to Analyze
+          </h2>
+          <p className="text-gray-600 mb-4 text-sm">
+            Choose which sites you want to calculate edges for
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {SITES.map(site => (
+              <label
+                key={site.id}
+                className={`flex items-center gap-2 p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                  selectedSites.includes(site.id)
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedSites.includes(site.id)}
+                  onChange={(e) => handleSiteToggle(site.id, e.target.checked)}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div className={`w-3 h-3 rounded-full ${site.color}`}></div>
+                <span className="font-medium text-sm">{site.name}</span>
+              </label>
+            ))}
+          </div>
+
+          <p className="text-xs text-gray-500 mt-3">
+            💾 Your selection will be saved for next time
+          </p>
+        </div>
+
         {/* Upload Card */}
-        <FileUploader onFilesSelected={handleFilesSelected} />
+        {selectedSites.length > 0 && (
+          <FileUploader
+            onFilesSelected={handleFilesSelected}
+            selectedSites={selectedSites}
+          />
+        )}
+
+        {/* No sites selected message */}
+        {selectedSites.length === 0 && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded mb-6">
+            <p className="text-yellow-800">
+              <strong>No sites selected.</strong> Please select at least one site above to start.
+            </p>
+          </div>
+        )}
 
         {/* Calculate Button */}
-        {allFilesSelected && Object.keys(results).length === 0 && !isProcessing && (
+        {selectedSites.length > 0 && !isProcessing && Object.keys(results).length === 0 && (
           <div className="my-8 text-center">
             <button
               onClick={handleCalculate}
-              className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold text-xl px-12 py-4 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+              disabled={!canCalculate}
+              className={`font-bold text-xl px-12 py-4 rounded-xl shadow-lg transition-all ${
+                canCalculate
+                  ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white hover:shadow-xl transform hover:scale-105'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
-              ⚡ Calculate Edges
+              {canCalculate ? (
+                <>⚡ Calculate Edges ({selectedSites.length} site{selectedSites.length > 1 ? 's' : ''})</>
+              ) : (
+                <>Upload {requiredFiles - uploadedFiles} more file{requiredFiles - uploadedFiles > 1 ? 's' : ''}</>
+              )}
             </button>
           </div>
         )}
@@ -188,12 +318,12 @@ export default function EdgeCalculator() {
               <h3 className="text-2xl font-bold mb-2">Calculating Edges</h3>
               <p className="text-gray-600 mb-4">
                 {currentSite ? `Processing ${currentSite}...` : 'Starting...'}
-                <span className="block mt-1">({progress}/5 sites)</span>
+                <span className="block mt-1">({progress}/{selectedSites.length} sites)</span>
               </p>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${(progress / 5) * 100}%` }}
+                  style={{ width: `${(progress / selectedSites.length) * 100}%` }}
                 ></div>
               </div>
             </div>
