@@ -100,6 +100,14 @@
                     </div>
                 </div>
 
+                <!-- Debug Mode Checkbox -->
+                <div class="flex items-center justify-center mb-4">
+                    <input type="checkbox" id="debug-mode" name="debug" value="true" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="debug-mode" class="ml-2 text-sm text-gray-600">
+                        🔍 Debug Mode (show market parsing details)
+                    </label>
+                </div>
+
                 <!-- Submit Button -->
                 <div class="flex justify-center">
                     <button type="submit"
@@ -152,6 +160,15 @@
             <div class="bg-gray-900 rounded-lg shadow-md p-6 overflow-x-auto">
                 <pre id="results-output" class="results-output text-green-400 text-sm"></pre>
             </div>
+
+            <!-- Debug Output (shown when debug mode is enabled) -->
+            <div id="debug-output" class="hidden mt-6">
+                <div class="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-yellow-800 mb-4">🔍 Debug Information</h3>
+                    <p class="text-sm text-yellow-700 mb-2">BBM Columns: <span id="debug-bbm-cols" class="font-mono"></span></p>
+                    <div id="debug-sites" class="space-y-4"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -187,6 +204,64 @@
                     document.getElementById('result-date').textContent = dateStr;
                     document.getElementById('results-output').textContent = data.output;
                     document.getElementById('success-display').classList.remove('hidden');
+
+                    // Show debug info if available
+                    if (data.debug) {
+                        document.getElementById('debug-output').classList.remove('hidden');
+                        document.getElementById('debug-bbm-cols').textContent = data.bbm_columns.join(', ');
+
+                        const debugSitesEl = document.getElementById('debug-sites');
+                        debugSitesEl.innerHTML = '';
+
+                        for (const [site, info] of Object.entries(data.debug)) {
+                            const siteDiv = document.createElement('div');
+                            siteDiv.className = 'bg-white p-4 rounded border border-yellow-200';
+
+                            let html = `<h4 class="font-semibold text-yellow-800 mb-2">${site}</h4>`;
+                            html += `<p class="text-sm"><strong>Total rows:</strong> ${info.total_rows}</p>`;
+                            html += `<p class="text-sm"><strong>Total edges:</strong> ${info.total_edges}</p>`;
+                            html += `<p class="text-sm"><strong>Player matches failed:</strong> ${info.player_match_failed}</p>`;
+
+                            // Markets in file
+                            html += `<p class="text-sm mt-2"><strong>Markets in file:</strong></p>`;
+                            html += `<ul class="text-xs ml-4 font-mono">`;
+                            for (const [market, count] of Object.entries(info.markets_in_file || {})) {
+                                html += `<li>${market}: ${count}</li>`;
+                            }
+                            html += `</ul>`;
+
+                            // Parsed OK
+                            html += `<p class="text-sm mt-2 text-green-700"><strong>Markets parsed OK:</strong></p>`;
+                            html += `<ul class="text-xs ml-4 font-mono text-green-600">`;
+                            for (const [market, count] of Object.entries(info.markets_parsed || {})) {
+                                html += `<li>✓ ${market}: ${count}</li>`;
+                            }
+                            html += `</ul>`;
+
+                            // Failed markets
+                            if (Object.keys(info.markets_failed || {}).length > 0) {
+                                html += `<p class="text-sm mt-2 text-red-700"><strong>Markets FAILED:</strong></p>`;
+                                html += `<ul class="text-xs ml-4 font-mono text-red-600">`;
+                                for (const [market, reason] of Object.entries(info.markets_failed)) {
+                                    html += `<li>✗ ${market}: ${reason}</li>`;
+                                }
+                                html += `</ul>`;
+                            }
+
+                            // Edges by market
+                            html += `<p class="text-sm mt-2"><strong>Edges by market:</strong></p>`;
+                            html += `<ul class="text-xs ml-4 font-mono">`;
+                            for (const [market, count] of Object.entries(info.edges_by_market || {})) {
+                                html += `<li>${market}: ${count}</li>`;
+                            }
+                            html += `</ul>`;
+
+                            siteDiv.innerHTML = html;
+                            debugSitesEl.appendChild(siteDiv);
+                        }
+                    } else {
+                        document.getElementById('debug-output').classList.add('hidden');
+                    }
 
                     // Scroll to results
                     document.getElementById('success-display').scrollIntoView({ behavior: 'smooth' });

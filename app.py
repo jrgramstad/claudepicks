@@ -20,14 +20,17 @@ CORS(app, resources={
     }
 })
 
-# BBM column mapping
+# BBM column mapping - includes optional 3PT support
 BBM_COLUMNS = {
     'PTS': 'p',
     'REB': 'r',
     'AST': 'a',
     'STL': 's',
     'BLK': 'b',
-    'TO': 'to'
+    'TO': 'to',
+    '3PT': '3',      # 3-pointers - column may not exist in all BBM files
+    '3PM': '3',      # Alternative name for 3-pointers
+    'FG3M': 'fg3m',  # Another alternative
 }
 
 # Site names mapping
@@ -39,16 +42,24 @@ SITE_NAMES = {
     'fanduel': 'FanDuel'
 }
 
-def parse_market_to_bbm_columns(market: str) -> List[str]:
+def parse_market_to_bbm_columns(market: str, available_bbm_cols: set = None) -> Tuple[List[str], str]:
     """
     Parse market name to BBM column names.
-    Examples: 'PTS+REB+AST' -> ['p', 'r', 'a']
-              'Points' -> ['p']
-              'Rebounds' -> ['r']
+    Returns: (columns, reason) - columns list and reason if empty
+
+    Examples: 'PTS+REB+AST' -> (['p', 'r', 'a'], '')
+              'Points' -> (['p'], '')
+              '3PT Made' -> (['3'], '') or ([], 'no BBM column')
     """
     market_upper = market.upper().strip()
 
-    # Direct mappings
+    # Skip markets we can't calculate
+    skip_markets = ['DOUBLE DOUBLE', 'TRIPLE DOUBLE', 'DD', 'TD']
+    for skip in skip_markets:
+        if skip in market_upper:
+            return [], f'cannot calculate {market}'
+
+    # Direct mappings for single stats (full names and abbreviations)
     direct_mappings = {
         'POINTS': ['p'],
         'PTS': ['p'],
@@ -61,20 +72,78 @@ def parse_market_to_bbm_columns(market: str) -> List[str]:
         'BLOCKS': ['b'],
         'BLK': ['b'],
         'TURNOVERS': ['to'],
-        'TO': ['to']
+        'TO': ['to'],
+        '3PT MADE': ['3'],
+        '3-PT MADE': ['3'],
+        '3-POINTERS MADE': ['3'],
+        '3PM': ['3'],
+        '3PT': ['3'],
+        'THREE POINTERS': ['3'],
+        'THREES': ['3'],
     }
 
-    # Check for direct match
+    # Check for direct match first
     if market_upper in direct_mappings:
-        return direct_mappings[market_upper]
+        columns = direct_mappings[market_upper]
+        # Check if BBM has the required column
+        if available_bbm_cols:
+            for col in columns:
+                if col not in available_bbm_cols:
+                    return [], f'BBM missing column: {col}'
+        return columns, ''
 
-    # Check for combo stats (e.g., PTS+REB+AST)
+    # For combo stats, we need to map full words AND abbreviations
+    # e.g., "PTS+REB+AST" or "Points+Rebounds+Assists"
+    stat_mappings = {
+        # Abbreviations
+        'PTS': 'p',
+        'REB': 'r',
+        'AST': 'a',
+        'STL': 's',
+        'BLK': 'b',
+        'TO': 'to',
+        '3PT': '3',
+        '3PM': '3',
+        # Full words (checked after abbreviations to avoid substring issues)
+        'POINTS': 'p',
+        'REBOUNDS': 'r',
+        'ASSISTS': 'a',
+        'STEALS': 's',
+        'BLOCKS': 'b',
+        'TURNOVERS': 'to',
+    }
+
+    # Split by common delimiters and check each part
+    parts = re.split(r'[+/\s]+', market_upper)
     columns = []
-    for stat, col in BBM_COLUMNS.items():
-        if stat in market_upper:
-            columns.append(col)
 
-    return columns if columns else []
+    for part in parts:
+        part = part.strip()
+        if part in stat_mappings:
+            col = stat_mappings[part]
+            if col not in columns:
+                columns.append(col)
+
+    # If splitting didn't work, try substring matching (but be careful)
+    if not columns:
+        # Use word boundaries to avoid false matches
+        for stat, col in stat_mappings.items():
+            # Create pattern that matches whole word or at boundary
+            pattern = r'(?:^|[^A-Z])' + re.escape(stat) + r'(?:$|[^A-Z])'
+            if re.search(pattern, market_upper) or market_upper == stat:
+                if col not in columns:
+                    columns.append(col)
+
+    if not columns:
+        return [], f'unrecognized market format: {market}'
+
+    # Check if BBM has all required columns
+    if available_bbm_cols:
+        missing = [col for col in columns if col not in available_bbm_cols]
+        if missing:
+            return [], f'BBM missing columns: {missing}'
+
+    return columns, ''
 
 
 def calculate_bbm_projection(bbm_row: pd.Series, columns: List[str]) -> Optional[float]:
@@ -131,13 +200,36 @@ def filter_nba_data(df: pd.DataFrame) -> pd.DataFrame:
     return df.copy()
 
 
-def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_name: str) -> List[Dict]:
-    """Calculate edges for a single site."""
+def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_name: str, debug: bool = False) -> Tuple[List[Dict], Dict]:
+    """
+    Calculate edges for a single site.
+    Returns: (edges, debug_info)
+    """
     edges = []
     bbm_names = bbm_df['Name'].tolist()
 
     # Create BBM lookup dictionary
     bbm_lookup = {row['Name']: row for _, row in bbm_df.iterrows()}
+
+    # Get available BBM columns for validation
+    available_bbm_cols = set(bbm_df.columns.tolist())
+
+    # Debug info
+    debug_info = {
+        'total_rows': len(site_df),
+        'markets_in_file': {},
+        'markets_parsed': {},
+        'markets_failed': {},
+        'player_match_failed': 0,
+        'projection_failed': 0,
+        'edges_by_market': {},
+    }
+
+    # Count markets in file
+    for _, row in site_df.iterrows():
+        market = row.get('Market', '')
+        if market:
+            debug_info['markets_in_file'][market] = debug_info['markets_in_file'].get(market, 0) + 1
 
     for _, row in site_df.iterrows():
         player_name = row.get('Player', '')
@@ -150,18 +242,24 @@ def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_n
         # Fuzzy match player name
         matched_name = fuzzy_match_player(player_name, bbm_names)
         if not matched_name:
+            debug_info['player_match_failed'] += 1
             continue
 
-        # Parse market to BBM columns
-        bbm_columns = parse_market_to_bbm_columns(market)
+        # Parse market to BBM columns (with validation)
+        bbm_columns, fail_reason = parse_market_to_bbm_columns(market, available_bbm_cols)
         if not bbm_columns:
+            debug_info['markets_failed'][market] = fail_reason
             continue
+
+        # Track successfully parsed markets
+        debug_info['markets_parsed'][market] = debug_info['markets_parsed'].get(market, 0) + 1
 
         # Calculate BBM projection
         bbm_row = bbm_lookup[matched_name]
         bbm_projection = calculate_bbm_projection(bbm_row, bbm_columns)
 
         if bbm_projection is None:
+            debug_info['projection_failed'] += 1
             continue
 
         # Calculate edge
@@ -181,10 +279,28 @@ def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_n
                 'abs_edge': abs(edge),
                 'direction': direction
             })
+
+            # Track edges by market
+            debug_info['edges_by_market'][market] = debug_info['edges_by_market'].get(market, 0) + 1
+
         except (ValueError, TypeError):
             continue
 
-    return edges
+    debug_info['total_edges'] = len(edges)
+
+    if debug:
+        print(f"\n=== {site_name.upper()} MARKET DEBUG ===")
+        print(f"Total rows: {debug_info['total_rows']}")
+        print(f"Markets in file: {debug_info['markets_in_file']}")
+        print(f"Markets parsed OK: {debug_info['markets_parsed']}")
+        print(f"Markets FAILED: {debug_info['markets_failed']}")
+        print(f"Player match failed: {debug_info['player_match_failed']}")
+        print(f"Projection failed: {debug_info['projection_failed']}")
+        print(f"Edges by market: {debug_info['edges_by_market']}")
+        print(f"Total edges: {debug_info['total_edges']}")
+        print(f"BBM columns available: {sorted(available_bbm_cols)}")
+
+    return edges, debug_info
 
 
 def rank_and_select_top_picks(edges: List[Dict]) -> Tuple[List[Dict], Optional[Dict]]:
@@ -317,9 +433,13 @@ def calculate():
                 'error': f'BBM file missing required columns: {missing_cols}'
             }), 400
 
+        # Check for debug mode
+        debug_mode = request.form.get('debug', 'false').lower() == 'true'
+
         # Process each site
         all_picks = {}
         all_output = []
+        all_debug_info = {}
 
         for site_key in ['prizepicks', 'underdog', 'pick6', 'sleeper', 'fanduel']:
             site_file = uploaded_files[site_key]
@@ -337,8 +457,9 @@ def calculate():
                     'error': f'{site_name} file missing required columns: {missing_cols}'
                 }), 400
 
-            # Calculate edges
-            edges = calculate_edges_for_site(site_df, bbm_df, site_name)
+            # Calculate edges (with debug info)
+            edges, debug_info = calculate_edges_for_site(site_df, bbm_df, site_name, debug=debug_mode)
+            all_debug_info[site_name] = debug_info
 
             # Rank and select top picks
             top_picks, best_under = rank_and_select_top_picks(edges)
@@ -359,12 +480,19 @@ def calculate():
         # Combine all output
         full_output = "\n".join(all_output)
 
-        return jsonify({
+        response = {
             'success': True,
             'output': full_output,
             'csv': csv_output,
             'date': date_str
-        })
+        }
+
+        # Include debug info if requested
+        if debug_mode:
+            response['debug'] = all_debug_info
+            response['bbm_columns'] = list(bbm_df.columns)
+
+        return jsonify(response)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
