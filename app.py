@@ -200,6 +200,92 @@ def filter_nba_data(df: pd.DataFrame) -> pd.DataFrame:
     return df.copy()
 
 
+def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize BBM column names to expected format.
+    Handles various BBM file formats.
+    """
+    # Column name mappings (various possible names -> standard name)
+    column_mappings = {
+        # Name column
+        'Name': 'Name',
+        'Player': 'Name',
+        'player': 'Name',
+        'name': 'Name',
+        'PLAYER': 'Name',
+        'NAME': 'Name',
+        # Points
+        'p': 'p',
+        'PTS': 'p',
+        'pts': 'p',
+        'Points': 'p',
+        'points': 'p',
+        'POINTS': 'p',
+        # Rebounds
+        'r': 'r',
+        'REB': 'r',
+        'reb': 'r',
+        'Rebounds': 'r',
+        'rebounds': 'r',
+        'TRB': 'r',
+        'trb': 'r',
+        'REBOUNDS': 'r',
+        # Assists
+        'a': 'a',
+        'AST': 'a',
+        'ast': 'a',
+        'Assists': 'a',
+        'assists': 'a',
+        'ASSISTS': 'a',
+        # Steals
+        's': 's',
+        'STL': 's',
+        'stl': 's',
+        'Steals': 's',
+        'steals': 's',
+        'STEALS': 's',
+        # Blocks
+        'b': 'b',
+        'BLK': 'b',
+        'blk': 'b',
+        'Blocks': 'b',
+        'blocks': 'b',
+        'BLOCKS': 'b',
+        # Turnovers
+        'to': 'to',
+        'TO': 'to',
+        'TOV': 'to',
+        'tov': 'to',
+        'Turnovers': 'to',
+        'turnovers': 'to',
+        'TURNOVERS': 'to',
+        # 3-pointers
+        '3': '3',
+        '3PT': '3',
+        '3pt': '3',
+        '3PM': '3',
+        '3pm': '3',
+        'FG3M': '3',
+        'fg3m': '3',
+        'FG3': '3',
+        'fg3': '3',
+        'Three': '3',
+        'Threes': '3',
+        '3P': '3',
+    }
+
+    # Rename columns based on mappings
+    new_columns = {}
+    for col in df.columns:
+        if col in column_mappings:
+            new_columns[col] = column_mappings[col]
+
+    if new_columns:
+        df = df.rename(columns=new_columns)
+
+    return df
+
+
 def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_name: str, debug: bool = False) -> Tuple[List[Dict], Dict]:
     """
     Calculate edges for a single site.
@@ -395,14 +481,24 @@ def index():
 def calculate():
     """Process uploaded files and calculate edges."""
     try:
-        # Check for required files
-        required_files = ['prizepicks', 'underdog', 'pick6', 'sleeper', 'fanduel', 'bbm']
+        # BBM is required, site files are optional
+        site_keys = ['prizepicks', 'underdog', 'pick6', 'sleeper', 'fanduel']
         uploaded_files = {}
 
-        for file_key in required_files:
-            if file_key not in request.files or request.files[file_key].filename == '':
-                return jsonify({'error': f'Missing file: {file_key}'}), 400
-            uploaded_files[file_key] = request.files[file_key]
+        # Check for BBM file (required)
+        if 'bbm' not in request.files or request.files['bbm'].filename == '':
+            return jsonify({'error': 'Missing required file: BBM'}), 400
+        uploaded_files['bbm'] = request.files['bbm']
+
+        # Collect optional site files
+        for site_key in site_keys:
+            if site_key in request.files and request.files[site_key].filename != '':
+                uploaded_files[site_key] = request.files[site_key]
+
+        # Check at least one site file was uploaded
+        site_files = [k for k in uploaded_files.keys() if k != 'bbm']
+        if not site_files:
+            return jsonify({'error': 'Please upload at least one site file (PrizePicks, Underdog, Pick6, Sleeper, or FanDuel)'}), 400
 
         # Extract and validate dates
         dates = {}
@@ -412,36 +508,40 @@ def calculate():
                 if date:
                     dates[key] = date
 
-        # Check for date consistency
+        # Check for date consistency (only warn, don't block)
         unique_dates = set(dates.values())
-        if len(unique_dates) > 1:
-            return jsonify({
-                'error': f'Date mismatch detected: {dates}. All files should be from the same date.'
-            }), 400
-
         date_str = list(unique_dates)[0] if unique_dates else datetime.now().strftime('%Y-%m-%d')
 
         # Read BBM file
         bbm_file = uploaded_files['bbm']
         bbm_df = read_file(bbm_file)
 
-        # Validate BBM columns
+        # Normalize BBM column names (handle different formats)
+        bbm_df = normalize_bbm_columns(bbm_df)
+
+        # Validate BBM columns after normalization
         required_bbm_cols = ['Name', 'p', 'r', 'a']
         missing_cols = [col for col in required_bbm_cols if col not in bbm_df.columns]
         if missing_cols:
+            # Show what columns ARE available to help user debug
+            available = list(bbm_df.columns)
             return jsonify({
-                'error': f'BBM file missing required columns: {missing_cols}'
+                'error': f'BBM file missing required columns: {missing_cols}. Available columns: {available}'
             }), 400
 
         # Check for debug mode
         debug_mode = request.form.get('debug', 'false').lower() == 'true'
 
-        # Process each site
+        # Process each site (only those that were uploaded)
         all_picks = {}
         all_output = []
         all_debug_info = {}
 
-        for site_key in ['prizepicks', 'underdog', 'pick6', 'sleeper', 'fanduel']:
+        for site_key in site_keys:
+            # Skip sites that weren't uploaded
+            if site_key not in uploaded_files:
+                continue
+
             site_file = uploaded_files[site_key]
             site_name = SITE_NAMES.get(site_key, site_key.title())
 
@@ -453,9 +553,9 @@ def calculate():
             required_site_cols = ['Player', 'Market', 'Line']
             missing_cols = [col for col in required_site_cols if col not in site_df.columns]
             if missing_cols:
-                return jsonify({
-                    'error': f'{site_name} file missing required columns: {missing_cols}'
-                }), 400
+                # Skip this site with a warning instead of failing
+                all_output.append(f"⚠️ {site_name}: Skipped - missing columns {missing_cols}")
+                continue
 
             # Calculate edges (with debug info)
             edges, debug_info = calculate_edges_for_site(site_df, bbm_df, site_name, debug=debug_mode)
