@@ -76,9 +76,14 @@ def parse_market_to_bbm_columns(market: str, available_bbm_cols: set = None) -> 
         '3PT MADE': ['3'],
         '3-PT MADE': ['3'],
         '3-POINTERS MADE': ['3'],
+        '3 POINTERS MADE': ['3'],
+        '3-POINTER MADE': ['3'],
+        '3 POINTER MADE': ['3'],
         '3PM': ['3'],
         '3PT': ['3'],
+        '3S': ['3'],
         'THREE POINTERS': ['3'],
+        'THREE POINTERS MADE': ['3'],
         'THREES': ['3'],
     }
 
