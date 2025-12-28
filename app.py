@@ -53,8 +53,8 @@ def parse_market_to_bbm_columns(market: str, available_bbm_cols: set = None) -> 
     """
     market_upper = market.upper().strip()
 
-    # Skip markets we can't calculate
-    skip_markets = ['DOUBLE DOUBLE', 'TRIPLE DOUBLE', 'DD', 'TD']
+    # Skip markets we can't calculate (BBM doesn't have attempt stats)
+    skip_markets = ['DOUBLE DOUBLE', 'TRIPLE DOUBLE', 'DD', 'TD', 'ATTEMPTS', 'ATTEMPT', 'FGA', 'FTA', '3PA']
     for skip in skip_markets:
         if skip in market_upper:
             return [], f'cannot calculate {market}'
