@@ -296,6 +296,55 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def normalize_site_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize site file column names to expected format.
+    Handles various site file formats (RotoWire, etc.)
+    """
+    column_mappings = {
+        # Player column
+        'Player': 'Player',
+        'player': 'Player',
+        'PLAYER': 'Player',
+        'Name': 'Player',
+        'name': 'Player',
+        'PlayerName': 'Player',
+        'Player Name': 'Player',
+        'player_name': 'Player',
+        # Market column
+        'Market': 'Market',
+        'market': 'Market',
+        'MARKET': 'Market',
+        'Market Name': 'Market',
+        'market_name': 'Market',
+        'MarketName': 'Market',
+        'Prop': 'Market',
+        'prop': 'Market',
+        'Stat': 'Market',
+        'stat': 'Market',
+        # Line column
+        'Line': 'Line',
+        'line': 'Line',
+        'LINE': 'Line',
+        'Over/Under': 'Line',
+        'OU': 'Line',
+        'Projection': 'Line',
+        'projection': 'Line',
+        'Target': 'Line',
+        'target': 'Line',
+    }
+
+    new_columns = {}
+    for col in df.columns:
+        if col in column_mappings:
+            new_columns[col] = column_mappings[col]
+
+    if new_columns:
+        df = df.rename(columns=new_columns)
+
+    return df
+
+
 def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_name: str, debug: bool = False) -> Tuple[List[Dict], Dict]:
     """
     Calculate edges for a single site.
@@ -564,6 +613,7 @@ def calculate():
             # Read and filter site data
             site_df = read_file(site_file)
             site_df = filter_nba_data(site_df)
+            site_df = normalize_site_columns(site_df)
 
             # Validate site columns
             required_site_cols = ['Player', 'Market', 'Line']
