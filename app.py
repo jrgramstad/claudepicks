@@ -216,6 +216,7 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
         'NAME': 'Name',
         # Points
         'p': 'p',
+        'P': 'p',
         'PTS': 'p',
         'pts': 'p',
         'Points': 'p',
@@ -223,6 +224,7 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
         'POINTS': 'p',
         # Rebounds
         'r': 'r',
+        'R': 'r',
         'REB': 'r',
         'reb': 'r',
         'Rebounds': 'r',
@@ -232,6 +234,7 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
         'REBOUNDS': 'r',
         # Assists
         'a': 'a',
+        'A': 'a',
         'AST': 'a',
         'ast': 'a',
         'Assists': 'a',
@@ -239,6 +242,7 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
         'ASSISTS': 'a',
         # Steals
         's': 's',
+        'S': 's',
         'STL': 's',
         'stl': 's',
         'Steals': 's',
@@ -246,6 +250,7 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
         'STEALS': 's',
         # Blocks
         'b': 'b',
+        'B': 'b',
         'BLK': 'b',
         'blk': 'b',
         'Blocks': 'b',
@@ -519,14 +524,20 @@ def calculate():
         # Normalize BBM column names (handle different formats)
         bbm_df = normalize_bbm_columns(bbm_df)
 
-        # Validate BBM columns after normalization
-        required_bbm_cols = ['Name', 'p', 'r', 'a']
-        missing_cols = [col for col in required_bbm_cols if col not in bbm_df.columns]
-        if missing_cols:
-            # Show what columns ARE available to help user debug
+        # Validate BBM columns after normalization - only Name is truly required
+        if 'Name' not in bbm_df.columns:
             available = list(bbm_df.columns)
             return jsonify({
-                'error': f'BBM file missing required columns: {missing_cols}. Available columns: {available}'
+                'error': f'BBM file missing Name column. Available columns: {available}'
+            }), 400
+
+        # Check which stat columns are available
+        stat_cols = ['p', 'r', 'a', 's', 'b', 'to', '3']
+        available_stats = [col for col in stat_cols if col in bbm_df.columns]
+        if not available_stats:
+            available = list(bbm_df.columns)
+            return jsonify({
+                'error': f'BBM file has no stat columns (need at least one of: p, r, a, s, b, to, 3). Available columns: {available}'
             }), 400
 
         # Check for debug mode
