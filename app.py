@@ -214,6 +214,10 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
         'name': 'Name',
         'PLAYER': 'Name',
         'NAME': 'Name',
+        'full_name': 'Name',
+        'Full_Name': 'Name',
+        'FullName': 'Name',
+        'fullname': 'Name',
         # Points
         'p': 'p',
         'P': 'p',
@@ -276,6 +280,7 @@ def normalize_bbm_columns(df: pd.DataFrame) -> pd.DataFrame:
         'fg3': '3',
         'Three': '3',
         'Threes': '3',
+        'threes': '3',
         '3P': '3',
     }
 
