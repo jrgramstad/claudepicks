@@ -451,60 +451,125 @@ def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_n
     return edges, debug_info
 
 
-def rank_and_select_top_picks(edges: List[Dict]) -> Tuple[List[Dict], Optional[Dict]]:
+def rank_and_select_top_picks(edges: List[Dict]) -> Dict:
     """
-    Rank edges and select top 10 picks with player uniqueness.
-    Also find best under.
+    Rank edges and return multiple ranking lists.
+    Returns dict with: top_by_pct, top_by_abs, best_by_market, best_under
     """
     if not edges:
-        return [], None
+        return {
+            'top_by_pct': [],
+            'top_by_abs': [],
+            'best_by_market': {},
+            'best_under': None
+        }
 
-    # Sort by absolute edge percentage descending (better metric than raw edge)
-    sorted_edges = sorted(edges, key=lambda x: x['abs_edge_pct'], reverse=True)
+    # Sort by absolute edge percentage descending
+    sorted_by_pct = sorted(edges, key=lambda x: x['abs_edge_pct'], reverse=True)
 
-    # Enforce player uniqueness
-    seen_players = set()
-    top_picks = []
+    # Sort by absolute edge (raw points) descending
+    sorted_by_abs = sorted(edges, key=lambda x: x['abs_edge'], reverse=True)
 
-    for edge in sorted_edges:
-        player = edge['player'].lower()
-        if player not in seen_players:
-            top_picks.append(edge)
-            seen_players.add(player)
+    def get_top_unique(sorted_list, count=10):
+        """Get top N picks with player uniqueness."""
+        seen_players = set()
+        top_picks = []
+        for edge in sorted_list:
+            player = edge['player'].lower()
+            if player not in seen_players:
+                top_picks.append(edge)
+                seen_players.add(player)
+                if len(top_picks) == count:
+                    break
+        return top_picks
 
-            if len(top_picks) == 10:
-                break
+    # Top 10 by percentage
+    top_by_pct = get_top_unique(sorted_by_pct, 10)
+
+    # Top 10 by absolute edge
+    top_by_abs = get_top_unique(sorted_by_abs, 10)
+
+    # Best pick per market type
+    best_by_market = {}
+    for edge in sorted_by_pct:
+        market = edge['market']
+        if market not in best_by_market:
+            best_by_market[market] = edge
 
     # Find best under (highest absolute edge where direction='Under')
-    unders = [e for e in sorted_edges if e['direction'] == 'Under']
+    unders = [e for e in sorted_by_pct if e['direction'] == 'Under']
     best_under = unders[0] if unders else None
 
-    return top_picks, best_under
+    return {
+        'top_by_pct': top_by_pct,
+        'top_by_abs': top_by_abs,
+        'best_by_market': best_by_market,
+        'best_under': best_under
+    }
 
 
-def format_output_for_site(site_name: str, top_picks: List[Dict], best_under: Optional[Dict]) -> str:
-    """Format output for a single site in screenshot-ready format."""
+def format_output_for_site(site_name: str, rankings: Dict) -> str:
+    """Format output for a single site with multiple ranking lists."""
     output = []
-    output.append("=" * 110)
-    output.append(f"🎯 {site_name.upper()} - TOP 10")
-    output.append("=" * 110)
 
-    if not top_picks:
-        output.append("No picks found for this site.")
+    top_by_pct = rankings.get('top_by_pct', [])
+    top_by_abs = rankings.get('top_by_abs', [])
+    best_by_market = rankings.get('best_by_market', {})
+    best_under = rankings.get('best_under')
+
+    def format_pick_line(i, pick):
+        edge_pct = pick.get('edge_pct', 0)
+        return (f"{i:<3} {pick['player'][:20]:<20} {pick['market'][:16]:<16} "
+               f"{pick['direction']:<6} {pick['line']:<6.1f} "
+               f"{pick['bbm_projection']:<6.1f} "
+               f"{pick['edge']:+6.1f} {edge_pct:+6.1f}%")
+
+    # === TOP 10 BY EDGE % ===
+    output.append("=" * 100)
+    output.append(f"🎯 {site_name.upper()} - TOP 10 BY EDGE %")
+    output.append("=" * 100)
+
+    if not top_by_pct:
+        output.append("No picks found.")
     else:
-        # Header
-        output.append(f"{'#':<3} {'Player':<22} {'Market':<18} {'Pick':<6} {'Line':<7} {'BBM':<7} {'Edge':<7} {'Edge%':<7}")
-        output.append("-" * 110)
-        for i, pick in enumerate(top_picks, 1):
-            edge_pct = pick.get('edge_pct', 0)
-            line = (f"{i:<3} {pick['player']:<22} {pick['market']:<18} "
-                   f"{pick['direction']:<6} {pick['line']:<7.1f} "
-                   f"{pick['bbm_projection']:<7.1f} "
-                   f"{pick['edge']:+6.1f} {edge_pct:+6.1f}%")
-            output.append(line)
+        output.append(f"{'#':<3} {'Player':<20} {'Market':<16} {'Pick':<6} {'Line':<6} {'BBM':<6} {'Edge':<7} {'Edge%':<7}")
+        output.append("-" * 100)
+        for i, pick in enumerate(top_by_pct, 1):
+            output.append(format_pick_line(i, pick))
 
     output.append("")
 
+    # === TOP 10 BY ABSOLUTE EDGE ===
+    output.append("=" * 100)
+    output.append(f"🎯 {site_name.upper()} - TOP 10 BY ABSOLUTE EDGE")
+    output.append("=" * 100)
+
+    if not top_by_abs:
+        output.append("No picks found.")
+    else:
+        output.append(f"{'#':<3} {'Player':<20} {'Market':<16} {'Pick':<6} {'Line':<6} {'BBM':<6} {'Edge':<7} {'Edge%':<7}")
+        output.append("-" * 100)
+        for i, pick in enumerate(top_by_abs, 1):
+            output.append(format_pick_line(i, pick))
+
+    output.append("")
+
+    # === BEST BY MARKET ===
+    output.append("=" * 100)
+    output.append(f"🎯 {site_name.upper()} - BEST BY MARKET")
+    output.append("=" * 100)
+
+    if not best_by_market:
+        output.append("No picks found.")
+    else:
+        for market, pick in best_by_market.items():
+            edge_pct = pick.get('edge_pct', 0)
+            output.append(f"{market:<18} {pick['player'][:18]:<18} {pick['direction']:<6} "
+                         f"Line: {pick['line']:<6.1f} Edge: {pick['edge']:+5.1f} ({edge_pct:+5.1f}%)")
+
+    output.append("")
+
+    # === BEST UNDER ===
     if best_under:
         under_pct = best_under.get('edge_pct', 0)
         output.append(f"🎯 BEST UNDER: {best_under['player']} "
@@ -513,16 +578,70 @@ def format_output_for_site(site_name: str, top_picks: List[Dict], best_under: Op
         output.append("🎯 BEST UNDER: None found")
 
     output.append("")
+    output.append("")
 
     return "\n".join(output)
 
 
-def generate_csv_output(all_picks: Dict[str, List[Dict]]) -> str:
+def format_ladder_output(edges: List[Dict]) -> str:
+    """
+    Format Underdog Ladders output.
+    Points only, Overs only, Top 20 by raw edge.
+    """
+    output = []
+
+    # Filter for Points market and Overs only
+    points_overs = [
+        e for e in edges
+        if e['market'].upper() in ['POINTS', 'PTS'] and e['direction'] == 'Over'
+    ]
+
+    if not points_overs:
+        output.append("=" * 80)
+        output.append("🏀 UNDERDOG LADDERS - TOP 20 POINT OVERS")
+        output.append("=" * 80)
+        output.append("No Points overs found.")
+        output.append("")
+        return "\n".join(output)
+
+    # Sort by raw edge (points over) descending
+    sorted_ladder = sorted(points_overs, key=lambda x: x['edge'], reverse=True)
+
+    # Get top 20 unique players
+    seen_players = set()
+    top_ladder = []
+    for edge in sorted_ladder:
+        player = edge['player'].lower()
+        if player not in seen_players:
+            top_ladder.append(edge)
+            seen_players.add(player)
+            if len(top_ladder) == 20:
+                break
+
+    output.append("=" * 80)
+    output.append("🏀 UNDERDOG LADDERS - TOP 20 POINT OVERS")
+    output.append("=" * 80)
+    output.append(f"{'#':<3} {'Player':<25} {'Line':<8} {'BBM':<8} {'Pts Over':<10}")
+    output.append("-" * 80)
+
+    for i, pick in enumerate(top_ladder, 1):
+        output.append(f"{i:<3} {pick['player'][:23]:<25} {pick['line']:<8.1f} "
+                     f"{pick['bbm_projection']:<8.1f} {pick['edge']:+8.1f}")
+
+    output.append("")
+    output.append("")
+
+    return "\n".join(output)
+
+
+def generate_csv_output(all_picks: Dict[str, Dict]) -> str:
     """Generate CSV output with all picks."""
     rows = []
 
-    for site_name, picks in all_picks.items():
-        for i, pick in enumerate(picks['top_10'], 1):
+    for site_name, rankings in all_picks.items():
+        # Use top_by_pct as the main list for CSV
+        top_picks = rankings.get('top_by_pct', [])
+        for i, pick in enumerate(top_picks, 1):
             rows.append({
                 'Rank': i,
                 'Site': site_name,
@@ -636,18 +755,20 @@ def calculate():
             edges, debug_info = calculate_edges_for_site(site_df, bbm_df, site_name, debug=debug_mode)
             all_debug_info[site_name] = debug_info
 
-            # Rank and select top picks
-            top_picks, best_under = rank_and_select_top_picks(edges)
+            # Rank and select top picks (returns dict with multiple rankings)
+            rankings = rank_and_select_top_picks(edges)
 
             # Store results
-            all_picks[site_name] = {
-                'top_10': top_picks,
-                'best_under': best_under
-            }
+            all_picks[site_name] = rankings
 
             # Format output
-            output = format_output_for_site(site_name, top_picks, best_under)
+            output = format_output_for_site(site_name, rankings)
             all_output.append(output)
+
+            # Add Underdog Ladders output if this is Underdog
+            if site_key == 'underdog':
+                ladder_output = format_ladder_output(edges)
+                all_output.append(ladder_output)
 
         # Generate CSV
         csv_output = generate_csv_output(all_picks)
