@@ -411,6 +411,7 @@ def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_n
         try:
             line_float = float(line)
             edge = bbm_projection - line_float
+            edge_pct = (edge / line_float * 100) if line_float != 0 else 0
             direction = "Over" if edge > 0 else "Under"
 
             edges.append({
@@ -421,7 +422,9 @@ def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_n
                 'line': line_float,
                 'bbm_projection': bbm_projection,
                 'edge': edge,
+                'edge_pct': edge_pct,
                 'abs_edge': abs(edge),
+                'abs_edge_pct': abs(edge_pct),
                 'direction': direction
             })
 
@@ -450,14 +453,14 @@ def calculate_edges_for_site(site_df: pd.DataFrame, bbm_df: pd.DataFrame, site_n
 
 def rank_and_select_top_picks(edges: List[Dict]) -> Tuple[List[Dict], Optional[Dict]]:
     """
-    Rank edges and select top 5 picks with player uniqueness.
+    Rank edges and select top 10 picks with player uniqueness.
     Also find best under.
     """
     if not edges:
         return [], None
 
-    # Sort by absolute edge descending
-    sorted_edges = sorted(edges, key=lambda x: x['abs_edge'], reverse=True)
+    # Sort by absolute edge percentage descending (better metric than raw edge)
+    sorted_edges = sorted(edges, key=lambda x: x['abs_edge_pct'], reverse=True)
 
     # Enforce player uniqueness
     seen_players = set()
@@ -469,7 +472,7 @@ def rank_and_select_top_picks(edges: List[Dict]) -> Tuple[List[Dict], Optional[D
             top_picks.append(edge)
             seen_players.add(player)
 
-            if len(top_picks) == 5:
+            if len(top_picks) == 10:
                 break
 
     # Find best under (highest absolute edge where direction='Under')
@@ -482,25 +485,30 @@ def rank_and_select_top_picks(edges: List[Dict]) -> Tuple[List[Dict], Optional[D
 def format_output_for_site(site_name: str, top_picks: List[Dict], best_under: Optional[Dict]) -> str:
     """Format output for a single site in screenshot-ready format."""
     output = []
-    output.append("=" * 100)
-    output.append(f"🎯 {site_name.upper()} - TOP 5")
-    output.append("=" * 100)
+    output.append("=" * 110)
+    output.append(f"🎯 {site_name.upper()} - TOP 10")
+    output.append("=" * 110)
 
     if not top_picks:
         output.append("No picks found for this site.")
     else:
+        # Header
+        output.append(f"{'#':<3} {'Player':<22} {'Market':<18} {'Pick':<6} {'Line':<7} {'BBM':<7} {'Edge':<7} {'Edge%':<7}")
+        output.append("-" * 110)
         for i, pick in enumerate(top_picks, 1):
-            line = (f"{i}. {pick['player']:<25} {pick['market']:<20} "
-                   f"{pick['direction']:<8} Line: {pick['line']:<8.1f} "
-                   f"BBM: {pick['bbm_projection']:<8.2f} "
-                   f"Edge: {pick['edge']:+.2f}")
+            edge_pct = pick.get('edge_pct', 0)
+            line = (f"{i:<3} {pick['player']:<22} {pick['market']:<18} "
+                   f"{pick['direction']:<6} {pick['line']:<7.1f} "
+                   f"{pick['bbm_projection']:<7.1f} "
+                   f"{pick['edge']:+6.1f} {edge_pct:+6.1f}%")
             output.append(line)
 
     output.append("")
 
     if best_under:
+        under_pct = best_under.get('edge_pct', 0)
         output.append(f"🎯 BEST UNDER: {best_under['player']} "
-                     f"({best_under['market']}, Edge: {best_under['edge']:.2f})")
+                     f"({best_under['market']}, Edge: {best_under['edge']:.1f}, {under_pct:.1f}%)")
     else:
         output.append("🎯 BEST UNDER: None found")
 
@@ -514,7 +522,7 @@ def generate_csv_output(all_picks: Dict[str, List[Dict]]) -> str:
     rows = []
 
     for site_name, picks in all_picks.items():
-        for i, pick in enumerate(picks['top_5'], 1):
+        for i, pick in enumerate(picks['top_10'], 1):
             rows.append({
                 'Rank': i,
                 'Site': site_name,
@@ -522,8 +530,9 @@ def generate_csv_output(all_picks: Dict[str, List[Dict]]) -> str:
                 'Market': pick['market'],
                 'Direction': pick['direction'],
                 'Line': pick['line'],
-                'BBM_Projection': pick['bbm_projection'],
-                'Edge': pick['edge']
+                'BBM_Projection': round(pick['bbm_projection'], 2),
+                'Edge': round(pick['edge'], 2),
+                'Edge_Pct': round(pick.get('edge_pct', 0), 1)
             })
 
     df = pd.DataFrame(rows)
@@ -632,7 +641,7 @@ def calculate():
 
             # Store results
             all_picks[site_name] = {
-                'top_5': top_picks,
+                'top_10': top_picks,
                 'best_under': best_under
             }
 
