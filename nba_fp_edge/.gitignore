@@ -1,0 +1,33 @@
+# Data files (contain actual BBM exports and lines)
+data/bbm_*.xls
+data/bbm_*.xlsx
+data/*predictions*.csv
+data/lines.csv
+
+# Keep example files
+!data/lines_example.csv
+
+# Exports
+exports/*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
